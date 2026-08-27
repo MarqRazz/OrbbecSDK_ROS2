@@ -2219,6 +2219,7 @@ void OBCameraNode::startStreams() {
   }
   pipeline_started_.store(true);
   set_state(lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE);
+  advertiseServiceTrigger();
 }
 
 void OBCameraNode::startIMUSyncStream() {
@@ -2316,6 +2317,7 @@ void OBCameraNode::stopStreams() {
 
   // Mark pipeline as stopping to prevent new operations
   pipeline_started_.store(false);
+  unadvertiseServiceTrigger();
 
   try {
     // Check if device is still valid before stopping pipeline

@@ -404,6 +404,12 @@ class OBCameraNode {
   void setSYNCHostimeCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
   void resetCaptureServiceVariables();
+  // Advertising send_service_trigger is tied to the pipeline rather than to
+  // construction, so the service is only present while a trigger can be served.
+  void advertiseServiceTrigger();
+
+  void unadvertiseServiceTrigger();
+
   void sendSoftwareTriggerCallback(const std::shared_ptr<CameraTrigger::Request>& request,
                                    std::shared_ptr<CameraTrigger::Response>& response);
 

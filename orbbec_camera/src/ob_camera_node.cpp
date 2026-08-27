@@ -4491,6 +4491,12 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   } else if (stream_index == DEPTH) {
     fps_delay_status_depth_->tick(frame_timestamp);
   }
+  // publish() moves out of image_msg, so take a copy for the capture path when a
+  // service capture is in flight and the frame is also going to a subscriber.
+  sensor_msgs::msg::Image::UniquePtr captured_image_msg;
+  if (service_trigger_enabled_ and service_capture_started_ and has_raw_image_subscriber) {
+    captured_image_msg = std::make_unique<sensor_msgs::msg::Image>(*image_msg);
+  }
   if (has_raw_image_subscriber) {
     if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
         (stream_index == COLOR || stream_index == DEPTH)) {
@@ -4500,18 +4506,21 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     image_publishers_[stream_index]->publish(std::move(image_msg));
   }
   if (service_trigger_enabled_ and service_capture_started_) {
+    if (!captured_image_msg) {
+      captured_image_msg = std::move(image_msg);
+    }
     std::unique_lock<std::mutex> lock(service_capture_lock_);
     if (stream_index == COLOR) {
-      if (image_msg) {
+      if (captured_image_msg) {
         number_of_rgb_frames_captured_++;
-        color_image_ = std::move(image_msg);
+        color_image_ = std::move(captured_image_msg);
         color_image_camera_info_ = camera_info;
       }
     }
     else if (stream_index == DEPTH) {
-      if (image_msg) {
+      if (captured_image_msg) {
         number_of_depth_frames_captured_++;
-        depth_image_ = std::move(image_msg);
+        depth_image_ = std::move(captured_image_msg);
         depth_image_camera_info_ = camera_info;
       }
     }

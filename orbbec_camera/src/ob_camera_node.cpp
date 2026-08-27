@@ -4491,13 +4491,18 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   } else if (stream_index == DEPTH) {
     fps_delay_status_depth_->tick(frame_timestamp);
   }
-  // publish() moves out of image_msg, so take a copy for the capture path when a
-  // service capture is in flight and the frame is also going to a subscriber.
+  // A frame that only exists because a service trigger asked for it goes to the
+  // topic whether or not a subscriber can be seen. get_subscription_count() reads
+  // zero under some middlewares while subscribers are attached, and skipping the
+  // publish then leaves a consumer that collects from the topics with nothing.
+  const bool service_capture_in_flight = service_trigger_enabled_ and service_capture_started_;
+  const bool publish_raw_image = has_raw_image_subscriber or service_capture_in_flight;
+  // publish() moves out of image_msg, so the capture path takes its copy first.
   sensor_msgs::msg::Image::UniquePtr captured_image_msg;
-  if (service_trigger_enabled_ and service_capture_started_ and has_raw_image_subscriber) {
+  if (service_capture_in_flight) {
     captured_image_msg = std::make_unique<sensor_msgs::msg::Image>(*image_msg);
   }
-  if (has_raw_image_subscriber) {
+  if (publish_raw_image) {
     if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
         (stream_index == COLOR || stream_index == DEPTH)) {
       frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
@@ -4505,10 +4510,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     }
     image_publishers_[stream_index]->publish(std::move(image_msg));
   }
-  if (service_trigger_enabled_ and service_capture_started_) {
-    if (!captured_image_msg) {
-      captured_image_msg = std::move(image_msg);
-    }
+  if (service_capture_in_flight) {
     std::unique_lock<std::mutex> lock(service_capture_lock_);
     if (stream_index == COLOR) {
       if (captured_image_msg) {

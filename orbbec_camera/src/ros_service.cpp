@@ -257,11 +257,8 @@ void OBCameraNode::setupCameraCtrlServices() {
                                   std::shared_ptr<SetBool::Response> response) {
         setSYNCHostimeCallback(request, response);
       });
-  send_service_trigger_srv_ = node_->create_service<CameraTrigger>(
-      camera_name_ + "/" + "send_service_trigger", [this](const std::shared_ptr<CameraTrigger::Request> request,
-                                     std::shared_ptr<CameraTrigger::Response> response) {
-        sendSoftwareTriggerCallback(request, response);
-      });
+  // send_service_trigger is advertised by startStreams(), not here: until the
+  // pipeline is up there is nothing to trigger.
   if (device_->getDeviceInfo()->getPid() == GEMINI_435Le_PID) {
     write_customerdata_srv_ = node_->create_service<SetString>(
         camera_name_ + "/" + "write_customer_data", [this](const std::shared_ptr<SetString::Request> request,
@@ -1560,6 +1557,21 @@ void OBCameraNode::handleChangeStateRequest(
     response->success = false;
     RCLCPP_ERROR_STREAM(logger_, "Unsupported transition ID: " << request->transition.id);
   }
+}
+
+void OBCameraNode::advertiseServiceTrigger() {
+  if (send_service_trigger_srv_) {
+    return;
+  }
+  send_service_trigger_srv_ = node_->create_service<CameraTrigger>(
+      camera_name_ + "/" + "send_service_trigger", [this](const std::shared_ptr<CameraTrigger::Request> request,
+                                     std::shared_ptr<CameraTrigger::Response> response) {
+        sendSoftwareTriggerCallback(request, response);
+      });
+}
+
+void OBCameraNode::unadvertiseServiceTrigger() {
+  send_service_trigger_srv_.reset();
 }
 
 void OBCameraNode::sendSoftwareTriggerCallback(
